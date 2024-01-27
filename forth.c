@@ -1,9 +1,11 @@
+// Following https://news.ycombinator.com/item?id=13082825
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
 #define nelem(x) (sizeof(x) / sizeof(*(x)))
+
 /****************************************************
  *
  * BEGIN FORTH
@@ -11,18 +13,52 @@
  ****************************************************/
 #define STACK_SIZE 100
 void *stack[STACK_SIZE];
-void *stackPointer = stack;
+void **stackPointer = stack;
+
+void printStack(void) {
+  int currentStackDepth = 0;
+  int stackDepth = stackPointer - stack;
+  int parameterStringLengths[stackDepth];
+  int totalLength = 0;
+
+  // First calculate the individual lengths to get the total length
+  while (currentStackDepth < stackDepth) {
+    int x = *((int *)stack[currentStackDepth]);
+    /* https://stackoverflow.com/a/32819876 */
+    int length = snprintf(NULL, 0, "%d", x);
+    parameterStringLengths[currentStackDepth] = length;
+    totalLength += length;
+    currentStackDepth++;
+  }
+
+  char *stackString = malloc(totalLength + 1);
+  stackString[totalLength] = '\0';
+  char *cursor = stackString;
+
+  currentStackDepth = 0;
+
+  while (currentStackDepth < stackDepth) {
+    int x = *((int *)stack[currentStackDepth]);
+    snprintf(cursor, parameterStringLengths[currentStackDepth] + 1, "%d", x);
+    cursor[parameterStringLengths[currentStackDepth]] = ' ';
+    cursor += parameterStringLengths[currentStackDepth] + 1;
+    currentStackDepth++;
+  }
+
+  printf("<%d> %s", currentStackDepth, stackString);
+  free(stackString);
+}
 
 void *popParameter(void) {
-  if (stackPointer <= *stack)
+  if (stackPointer <= stack)
     errx(EX_DATAERR, "Stack underflow");
-  return stackPointer--;
+  return *(--stackPointer);
 }
 
 void pushParameter(void *item) {
-  if ((stackPointer - *stack) >= sizeof(*stack) * STACK_SIZE)
+  if (stackPointer - stack >= STACK_SIZE)
     errx(EX_DATAERR, "Stack overflow");
-  stackPointer = item;
+  *stackPointer = item;
   stackPointer++;
 }
 
@@ -52,7 +88,7 @@ struct DictEntry {
   char *word;
   void (*func)(void);
 } dict[] = {
-    {"+", add}, {"-", sub}, {"print", print}
+    {"+", add}, {"-", sub}, {".", print}, {".s", printStack}
     /* , {"x", mul}, */
     /* {"/", div}, {"clr", clr} */
 };
@@ -63,7 +99,7 @@ struct DictEntry *findDictionaryEntry(char *word) {
   // Would this break on another architecture because of different signedness?
   int number = nelem(dict);
   while (difference <= number) {
-    if (strcmp(ptr->word, word) != -1) {
+    if (strcmp(ptr->word, word) == 0) {
       return ptr;
     }
     ptr++;
@@ -79,7 +115,7 @@ struct Token {
 } token;
 
 // Returns -1 if nothing to parse
-int getNextToken(char *input, size_t length, struct Token *token) {
+int getNextToken(char *input, int length, struct Token *token) {
   if (token->start == NULL) {
     token->start = input;
   }
@@ -135,6 +171,7 @@ void mainLoop(char *input, size_t length) {
     word[token.length] = 0x00;
     strncpy(word, token.start, token.length);
     dictEntry = findDictionaryEntry(word);
+
     if (dictEntry != NULL) {
       dictEntry->func();
     } else {
@@ -145,6 +182,7 @@ void mainLoop(char *input, size_t length) {
         // TODO Error!
       }
     }
+    token.start = token.start + token.length;
   }
 
   resetToken(&token);
@@ -162,16 +200,25 @@ void mainLoop(char *input, size_t length) {
  *
  ****************************************************/
 
-char *input = "2 3 4 +";
+char *input = "2 3 .s 4 + . .s";
 
 int main(void) {
   int *i = malloc(sizeof(int));
   *i = 5;
   pushParameter(i);
-  if ((&stackPointer - stack) >= sizeof(*stack) * STACK_SIZE)
-    errx(EX_DATAERR, "Stack overflow");
+  int *p0 = *stack;
+  printf("\nParameter[0] = %d\n", *p0);
+  if ((char **)stackPointer - (char **)stack >= STACK_SIZE)
+    errx(EX_DATAERR, "Stack overflow %ld %p %p", stackPointer - stack,
+         (void *)stackPointer, (void *)stack);
 
   mainLoop(input, strlen(input));
+
+  printf("Main loop returned\n");
+  printStack();
+  input = "2 3 .s 4 + . .s";
+  mainLoop(input, strlen(input));
+  printStack();
 }
 
 /****************************************************
