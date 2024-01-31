@@ -16,37 +16,12 @@ void *stack[STACK_SIZE];
 void **stackPointer = stack;
 
 void printStack(void) {
-  int currentStackDepth = 0;
-  int stackDepth = stackPointer - stack;
-  int parameterStringLengths[stackDepth];
-  int totalLength = 0;
+  int totalStackDepth = stackPointer - stack;
 
-  // First calculate the individual lengths to get the total length
-  while (currentStackDepth < stackDepth) {
-    int x = *((int *)stack[currentStackDepth]);
-    /* https://stackoverflow.com/a/32819876 */
-    int length = snprintf(NULL, 0, "%d", x);
-    parameterStringLengths[currentStackDepth] = length;
-    totalLength += length;
-    currentStackDepth++;
+  printf("<%d>", totalStackDepth);
+  for (int index = 0; index < totalStackDepth; index++) {
+    printf(" %d", *((int *)stack[index]));
   }
-
-  char *stackString = malloc(totalLength + 1);
-  stackString[totalLength] = '\0';
-  char *cursor = stackString;
-
-  currentStackDepth = 0;
-
-  while (currentStackDepth < stackDepth) {
-    int x = *((int *)stack[currentStackDepth]);
-    snprintf(cursor, parameterStringLengths[currentStackDepth] + 1, "%d", x);
-    cursor[parameterStringLengths[currentStackDepth]] = ' ';
-    cursor += parameterStringLengths[currentStackDepth] + 1;
-    currentStackDepth++;
-  }
-
-  printf("<%d> %s", currentStackDepth, stackString);
-  free(stackString);
 }
 
 void *popParameter(void) {
@@ -214,7 +189,7 @@ int main(void) {
 
   mainLoop(input, strlen(input));
 
-  printf("Main loop returned\n");
+  printf(" Main loop returned\n");
   printStack();
   input = "2 3 .s 4 + . .s";
   mainLoop(input, strlen(input));
